@@ -18,7 +18,7 @@ public class QueryString {
     private String from;
     private String limit;
     private String offset;
-    private String groupBy;
+    private String group;
     private String join;
 
     public QueryString(String query) {
@@ -41,7 +41,7 @@ public class QueryString {
         int start = 0;
         if (query != null && query.length() > 3) {
             Field field = null;
-            for (int i = 0; i < query.length() - 3; i++) {
+            for (int i = 0; i < query.length() ; i++) {
 
                 if (query.substring(i, i + 1).toLowerCase().equals("\"")) {
                     ignoreProcess = !ignoreProcess;
@@ -52,7 +52,7 @@ public class QueryString {
                 }
 
                 for (Field f : fields) {
-                    if (i + f.getName().length() + 1 < query.length()) {;
+                    if (i + f.getName().length() + 1 <= query.length()) {;
                         if (query.substring(i, i + f.getName().length() + 1).equals(f.getName() + ":")) {
                             setAtributeValue(field, query, start, i);
                             start = i + f.getName().length() + 1;
@@ -152,12 +152,12 @@ public class QueryString {
         this.offset = offset;
     }
 
-    public String getGroupBy() {
-        return groupBy;
+    public String getGroup() {
+        return group;
     }
 
-    public void setGroupBy(String groupBy) {
-        this.groupBy = groupBy;
+    public void setGroup(String group) {
+        this.group = group;
     }
 
     public String getJoin() {

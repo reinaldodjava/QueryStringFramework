@@ -10,6 +10,7 @@ import javax.inject.Named;
 import javax.persistence.EntityManager;
 import javax.persistence.Query;
 import com.querystringframework.exception.QueryException;
+import java.util.ArrayList;
 import org.json.JSONObject;
 
 /**
@@ -20,7 +21,6 @@ import org.json.JSONObject;
 public class QueryStringParse {
 
     private QueryString queryString;
-    private String queryJpql;
     private String alias;
     private List list;
     private LinkedHashMap<String, String> fieldsAlias;
@@ -31,10 +31,10 @@ public class QueryStringParse {
     }
 
     public String execute(QueryString queryString, EntityManager entityManager) {
-        return execute(queryString, entityManager, null);
+        return execute(queryString, entityManager, null, false);
     }
 
-    public String execute(QueryString queryString, EntityManager entityManager, List<String> allowedtables) {
+    public String execute(QueryString queryString, EntityManager entityManager, List<String> allowedtables, boolean datatable) {
 
         if (entityManager == null) {
             throw new QueryException("EntityManager não pode ser nulo");
@@ -49,11 +49,24 @@ public class QueryStringParse {
             throw new QueryException("atributo 'from' não encontrado");
         }
 
-        queryJpql = createQuery(allowedtables);
+        String queryJpql = createQuery(allowedtables);
+
+        Integer count = null;
+        List countResult = null;
 
         Query query = null;
         try {
             query = entityManager.createQuery(queryJpql);
+            if (datatable) {
+                countResult = entityManager.createQuery(createCountQuery(allowedtables)).getResultList();
+                if (countResult != null) {
+                    if (countResult.size() > 1) {
+                        count = countResult.size();
+                    } else {
+                        count = ((Long) countResult.get(0)).intValue();
+                    }
+                }
+            }
         } catch (Exception e) {
             throw new QueryException(e.getMessage());
         }
@@ -67,7 +80,24 @@ public class QueryStringParse {
         }
 
         this.list = query.getResultList();
-        return getJson();
+        return getJson(count);
+    }
+
+    public String createCountQuery(List<String> allowedtables) {
+        if (allowedtables != null && allowedtables.size() == 0) {
+            allowedtables = null;
+        }
+        String from = from(allowedtables);
+        String join = join(allowedtables);
+
+        StringBuilder stringBuilder = new StringBuilder("SELECT COUNT(" + alias + ") ");
+
+        stringBuilder.append(from);
+        stringBuilder.append(join);
+        stringBuilder.append(FilterParse.getStringFilter(queryString, alias, tableAlias));
+        stringBuilder.append(groupBy());
+
+        return stringBuilder.toString();
     }
 
     public String createQuery(List<String> allowedtables) {
@@ -83,6 +113,7 @@ public class QueryStringParse {
         stringBuilder.append(from);
         stringBuilder.append(join);
         stringBuilder.append(FilterParse.getStringFilter(queryString, alias, tableAlias));
+        stringBuilder.append(groupBy());
         stringBuilder.append(order());
 
         return stringBuilder.toString();
@@ -95,7 +126,28 @@ public class QueryStringParse {
         }
 
         String columns = "";
-        List<String> fields = Arrays.asList(allColumns.split(","));
+        List<String> fields = new ArrayList<>();// Arrays.asList(allColumns.split(","));
+
+        int startPosition = 0;
+        boolean ignoreProcess = false;
+        for (int i = 0; i < allColumns.length(); i++) {
+            if (allColumns.substring(i, i + 1).equals("{") || allColumns.substring(i, i + 1).equals("}")) {
+                ignoreProcess = !ignoreProcess;
+            }
+            if (ignoreProcess) {
+                continue;
+            }
+
+            if (allColumns.substring(i, i + 1).equals(",") || i == allColumns.length() - 1) {
+                if (i == allColumns.length() - 1) {
+                    fields.add(allColumns.substring(startPosition, i + 1).replaceAll("[{|}]", ""));
+                } else {
+                    fields.add(allColumns.substring(startPosition, i).replaceAll("[{|}]", ""));
+                }
+                startPosition = i + 1;
+            }
+        }
+
         fieldsAlias = new LinkedHashMap<>();
 
         Pattern aliasPattern = Pattern.compile("(\\@.+)");
@@ -193,21 +245,80 @@ public class QueryStringParse {
         return retorno;
     }
 
+    public String groupBy() {
+        String retorno = "";
+        if (queryString.getGroup() != null) {
+            String[] fieldGroups = queryString.getGroup().split(",");
+
+            for (String field : fieldGroups) {
+                field = field.trim();
+
+                if (retorno.isEmpty()) {
+                    retorno += " GROUP BY " + field;
+                } else {
+                    retorno += ", " + field + " ";
+                }
+            }
+        }
+
+        return retorno;
+    }
+
     public String order() {
         String retorno = "";
         if (queryString.getOrder() != null) {
-            String[] orders = queryString.getOrder().split(";");
+            List<String> orders = new ArrayList<>();
+
+            int startPosition = 0;
+            boolean ignoreProcess = false;
+            for (int i = 0; i < queryString.getOrder().length(); i++) {
+                if (queryString.getOrder().substring(i, i + 1).equals("{") || queryString.getOrder().substring(i, i + 1).equals("}")) {
+                    ignoreProcess = !ignoreProcess;
+                    continue;
+                }
+                if (ignoreProcess) {
+                    continue;
+                }
+
+                if (queryString.getOrder().substring(i, i + 1).equals(";") || i == queryString.getOrder().length() - 1) {
+                    if (queryString.getOrder().substring(i, i + 1).equals(";")) {
+                        orders.add(queryString.getOrder().substring(startPosition, i));
+                    } else {
+                        orders.add(queryString.getOrder().substring(startPosition, i + 1));
+                    }
+                    startPosition = i + 1;
+                    i++;
+                }
+            }
 
             for (String order : orders) {
                 order = order.trim();
-                String[] fields = null;
+                List<String> fields = new ArrayList<>();
                 String typeOrder = "";
+                String allFields = "";
                 if (order.subSequence(0, 3).equals("asc")) {
-                    fields = order.substring(4, order.length() - 1).split(",");
+                    allFields = order.substring(4, order.length() - 1);
                     typeOrder = " ASC ";
                 } else if (order.subSequence(0, 4).equals("desc")) {
-                    fields = order.substring(5, order.length() - 1).split(",");
+                    allFields = order.substring(5, order.length() - 1);
                     typeOrder = " DESC ";
+                }
+
+                startPosition = 0;
+                ignoreProcess = false;
+                for (int i = 0; i < allFields.length(); i++) {
+                    if (allFields.substring(i, i + 1).equals("{") || allFields.substring(i, i + 1).equals("}")) {
+                        ignoreProcess = !ignoreProcess;
+                    }
+                    if (ignoreProcess) {
+                        continue;
+                    }
+
+                    if (allFields.substring(i, i + 1).equals(",") || i == allFields.length() - 1) {
+                        fields.add(allFields.substring(startPosition, i + 1).replaceAll("[{|}]", ""));
+                        startPosition = i + 1;
+                        i++;
+                    }
                 }
 
                 if (fields != null) {
@@ -225,8 +336,15 @@ public class QueryStringParse {
         return retorno;
     }
 
-    public String getJson() {
-        String retorno = "[";
+    public String getJson(Integer count) {
+
+        String retorno = "";
+
+        if (count != null) {
+            retorno += "{\"count\":" + count + ", \"data\":";
+        }
+
+        retorno += "[";
         if (fieldsAlias != null && list != null) {
 
             for (Object object : list) {
@@ -248,7 +366,12 @@ public class QueryStringParse {
 
         }
 
-        return retorno + "]";
+        retorno += "]";
+        if (count != null) {
+            retorno += "}";
+        }
+
+        return retorno;
     }
 
     private JSONObject createJsonBody(JSONObject jsonObject, String alias, Object[] objectRow, int index) {

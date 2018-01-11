@@ -39,7 +39,7 @@ public class FilterParse {
             if (retorno.isEmpty()) {
                 retorno += " where " + filterOr;
             } else {
-                retorno += " and " + filterOr;
+                retorno += " and (" + filterOr + ")";
             }
         }
 
@@ -65,9 +65,16 @@ public class FilterParse {
 
         int startPosition = 3;
         boolean ignoreProcess = false;
+
+        aliasTableFrom = aliasTableFrom + ".";
+
         for (int i = 2; i < filter.length(); i++) {
-            if (filter.substring(i, i + 1).equals("\"")) {
+            if (filter.substring(i, i + 1).equals("\"")
+                    || (field.isEmpty() && (filter.substring(i, i + 1).equals("{") || filter.substring(i, i + 1).equals("}")))) {
                 ignoreProcess = !ignoreProcess;
+                if (field.isEmpty()) {
+                    aliasTableFrom = "";
+                }
             }
             if (ignoreProcess) {
                 continue;
@@ -75,7 +82,7 @@ public class FilterParse {
 
             if (filter.substring(i, i + 1).equals(",") || filter.substring(i, i + 1).equals(")")) {
                 if (field.isEmpty()) {
-                    field = filter.substring(startPosition, i);
+                    field = filter.substring(startPosition, i).replaceAll("[{|}]", "");
                 } else {
                     values.add(filter.substring(startPosition, i));
                 }
@@ -84,7 +91,6 @@ public class FilterParse {
         }
 
         //tratar values and query
-        aliasTableFrom = aliasTableFrom + ".";
         if (field.contains(".") && tableAlias.containsKey(field.substring(0, field.indexOf(".")))) {
             aliasTableFrom = "";
         }
@@ -128,11 +134,11 @@ public class FilterParse {
             } else if (filterType.equals("bt")) {
                 retorno += aliasTableFrom + field + " between " + values.get(0) + " and " + values.get(1);
             } else if (filterType.equals("ct")) {
-                retorno += aliasTableFrom + field + " like " + getValue("%" + values.get(i) + "%");
+                retorno += " lower(cast(" + aliasTableFrom + field + " as string)) like " + getValue("%" + values.get(i) + "%").toLowerCase();
             } else if (filterType.equals("ew")) {
-                retorno += aliasTableFrom + field + " like " + getValue("%" + values.get(i));
+                retorno += " lower(cast(" + aliasTableFrom + field + " as string)) like " + getValue("%" + values.get(i)).toLowerCase();
             } else if (filterType.equals("sw")) {
-                retorno += aliasTableFrom + field + " like " + getValue(values.get(i) + "%");
+                retorno += " lower(cast(" + aliasTableFrom + field + " as string)) like " + getValue(values.get(i) + "%").toLowerCase();
             } else if (filterType.equals("ge")) {
                 retorno += aliasTableFrom + field + " >= " + getValue(values.get(0));
             } else if (filterType.equals("gt")) {
@@ -156,7 +162,7 @@ public class FilterParse {
         if (value.toLowerCase().equals("null")) {
             return value;
         } else {
-            return String.format("'$s'", value);
+            return String.format("'%s'", value);
         }
     }
 
