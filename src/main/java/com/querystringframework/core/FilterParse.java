@@ -128,7 +128,7 @@ public class FilterParse {
         for (int i = 0; i < loop; i++) {
 
             if (filterType.equals("eq")) {
-                retorno += "(" + aliasTableFrom + field + ")=" + getValue(values.get(i));
+                retorno += " lower(cast(" + aliasTableFrom + field + " as string))=" + getValue(values.get(i));
             } else if (filterType.equals("in")) {
                 retorno += aliasTableFrom + field + " in (" + valueArray + ")";
             } else if (filterType.equals("bt")) {

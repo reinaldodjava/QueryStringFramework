@@ -34,7 +34,7 @@ public class QueryStringParse {
         return execute(queryString, entityManager, null, false);
     }
 
-    public String execute(QueryString queryString, EntityManager entityManager, List<String> allowedtables, boolean datatable) {
+    public String execute(QueryString queryString, EntityManager entityManager, List<String> allowedTables, boolean datatable) {
 
         if (entityManager == null) {
             throw new QueryException("EntityManager não pode ser nulo");
@@ -49,7 +49,7 @@ public class QueryStringParse {
             throw new QueryException("atributo 'from' não encontrado");
         }
 
-        String queryJpql = createQuery(allowedtables);
+        String queryJpql = createQuery(allowedTables);
 
         Integer count = null;
         List countResult = null;
@@ -58,7 +58,7 @@ public class QueryStringParse {
         try {
             query = entityManager.createQuery(queryJpql);
             if (datatable) {
-                countResult = entityManager.createQuery(createCountQuery(allowedtables)).getResultList();
+                countResult = entityManager.createQuery(createCountQuery(allowedTables)).getResultList();
                 if (countResult != null) {
                     if (countResult.size() > 1) {
                         count = countResult.size();
@@ -96,6 +96,7 @@ public class QueryStringParse {
         stringBuilder.append(join);
         stringBuilder.append(FilterParse.getStringFilter(queryString, alias, tableAlias));
         stringBuilder.append(groupBy());
+        ;
 
         return stringBuilder.toString();
     }
@@ -213,7 +214,7 @@ public class QueryStringParse {
 
     public String join(List<String> allowedtables) {
         String retorno = "";
-        if (queryString.getJoin() != null) {
+        if (queryString.getJoin() != null && !queryString.getJoin().isEmpty()) {
             String[] joins = queryString.getJoin().split(";");
 
             for (String join : joins) {
@@ -230,7 +231,6 @@ public class QueryStringParse {
 
                 if (values.length != 4) {
                     throw new QueryException("join mal formado: '" + join + "'. O join deve obedecer a estrutura: tipoJoin(Tabela,alias,atributoTabela,atributoFrom)");
-
                 }
 
                 if (allowedtables != null && !allowedtables.contains(values[0])) {
