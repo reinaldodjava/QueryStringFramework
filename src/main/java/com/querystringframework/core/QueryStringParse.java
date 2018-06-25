@@ -63,7 +63,17 @@ public class QueryStringParse {
                     if (countResult.size() > 1) {
                         count = countResult.size();
                     } else {
-                        count = ((Long) countResult.get(0)).intValue();
+
+                        if (countResult.get(0) instanceof Long) {
+                            count = ((Long) countResult.get(0)).intValue();
+                        } else {
+                            count = 0;
+                            for (Object object : (Object[]) countResult.get(0)) {
+                                if (count < ((Long) object).intValue()) {
+                                    count = ((Long) object).intValue();
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -90,13 +100,32 @@ public class QueryStringParse {
         String from = from(allowedtables);
         String join = join(allowedtables);
 
-        StringBuilder stringBuilder = new StringBuilder("SELECT COUNT(" + alias + ") ");
+        StringBuilder stringBuilder = new StringBuilder("SELECT ");
+
+        boolean dot = false;
+        String[] fields = queryString.getSelect().split(",");
+
+        String count = " ";
+        if (join.isEmpty()) {
+            for (String field : fields) {
+                if (field.contains(".")) {
+                    dot = true;
+                }
+                count += " COUNT(" + field + "),";
+            }
+        }
+
+        if (!dot) {
+            stringBuilder.append("COUNT(" + alias + ") ");
+        } else {
+            stringBuilder.append(count.substring(0, count.length() - 1));
+        }
 
         stringBuilder.append(from);
         stringBuilder.append(join);
+
         stringBuilder.append(FilterParse.getStringFilter(queryString, alias, tableAlias));
         stringBuilder.append(groupBy());
-        ;
 
         return stringBuilder.toString();
     }
